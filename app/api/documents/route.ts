@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 
+import { ingestSampleData, inspectIngest } from "@/src/ingest";
+
 export async function GET() {
-  return NextResponse.json({
-    status: "not-implemented",
-    message: "Document ingestion route will be added in the next step.",
-  });
+  try {
+    const result = await ingestSampleData();
+    return NextResponse.json(inspectIngest(result));
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Ingestion failed";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
