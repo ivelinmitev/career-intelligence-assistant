@@ -10,6 +10,7 @@
     "inspect:ingest": "tsx scripts/inspect-ingest.ts",
     "verify:retrieval": "tsx scripts/verify-retrieval.ts",
     "example:chat": "tsx scripts/example-chat.ts",
+    "verify:upload": "tsx scripts/verify-upload.ts",
     "test": "vitest run"
   },
   "keywords": [],
