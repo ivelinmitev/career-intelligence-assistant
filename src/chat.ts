@@ -1,21 +1,12 @@
 import { generateAnswer } from "@/src/generate";
 import { createLlm, getLlmProviderFromEnv } from "@/src/llm";
-import { buildSampleVectorStore, retrieveForJob } from "@/src/retrieve";
+import { retrieveForJob } from "@/src/retrieve";
+import { getSessionStore } from "@/src/session";
 import type { ChatRequest, ChatResponse, Llm } from "@/src/types";
 import { InMemoryVectorStore } from "@/src/vector-store";
 
-const storeCache = new Map<string, Promise<InMemoryVectorStore>>();
-
 export async function getDefaultStore(llm: Llm): Promise<InMemoryVectorStore> {
-  const cacheKey = process.env.LLM_PROVIDER ?? "local";
-  const existing = storeCache.get(cacheKey);
-  if (existing) {
-    return existing;
-  }
-
-  const created = buildSampleVectorStore(llm);
-  storeCache.set(cacheKey, created);
-  return created;
+  return getSessionStore(llm);
 }
 
 export async function answerQuestion(

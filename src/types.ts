@@ -22,6 +22,11 @@ export interface JobDocument extends BaseDocument {
 
 export type CareerDocument = ResumeDocument | JobDocument;
 
+export interface DocumentsState {
+  resume: ResumeDocument | null;
+  jobs: JobDocument[];
+}
+
 export interface ChunkMetadata {
   source: DocumentSource;
   documentId: string;

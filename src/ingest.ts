@@ -57,6 +57,22 @@ function jobIdFromFileName(fileName: string): string {
   return path.basename(fileName, path.extname(fileName));
 }
 
+export function allocateJobId(existingJobIds: string[], fileName: string): string {
+  const fromName = jobIdFromFileName(fileName).toLowerCase();
+  if (/^job-\d+$/.test(fromName) && !existingJobIds.includes(fromName)) {
+    return fromName;
+  }
+
+  const numbers = existingJobIds
+    .map((id) => {
+      const match = id.match(/^job-(\d+)$/i);
+      return match ? Number(match[1]) : 0;
+    })
+    .filter((value) => value > 0);
+  const next = (numbers.length ? Math.max(...numbers) : 0) + 1;
+  return `job-${next}`;
+}
+
 function titleFromMarkdownHeading(text: string, fallback: string): string {
   const match = text.match(/^#\s*(.+)$/m);
   return match?.[1]?.trim() ?? fallback;
