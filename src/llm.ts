@@ -205,11 +205,7 @@ export async function isOllamaAvailable(
   }
 }
 
-/**
- * `LLM_PROVIDER=auto` (or unset in the chat path) uses Ollama when it is
- * reachable, otherwise the offline local completer. Explicit local/ollama/gemini
- * always wins. Tests that pass an Llm never hit this probe.
- */
+/** Prefer Ollama when `LLM_PROVIDER` is unset/`auto` and the host is reachable. */
 export async function resolveLlmProvider(): Promise<LlmProvider> {
   const requested = process.env.LLM_PROVIDER ?? "auto";
   if (requested === "gemini" || requested === "ollama" || requested === "local") {

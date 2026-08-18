@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
     if (file.size > MAX_UPLOAD_BYTES) {
       return NextResponse.json(
-        { error: "File is too large. Keep uploads under 2 MB for this take-home." },
+        { error: "File is too large. Keep uploads under 2 MB." },
         { status: 400 },
       );
     }

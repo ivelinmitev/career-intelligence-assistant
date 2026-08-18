@@ -1,6 +1,6 @@
 # Career Intelligence Assistant
 
-Take-home Option 4: one resume, several job descriptions, a chat UI that answers from retrieved text only.
+Compare one resume to several job descriptions in a chat UI. Answers come from retrieved resume and job text only.
 
 I built this as a small Next.js app. No paid OpenAI key. Sample files are fake — do not commit a real CV.
 
@@ -102,7 +102,7 @@ I would not start with Kubernetes for this.
 | Context | Resume + **one** job | Stuff every JD into the prompt | “Align with Job 2” is wrong if Job 1 is in the context |
 | Guardrails | Empty retrieval refuses. Prompt says do not invent skills | Letting the model freewheel | Easy to test |
 | Quality | A few Vitest cases (Job 2 isolation, empty store, uploads) | A big eval set | Time box |
-| Observability | One JSON line: question, job id, chunk ids, provider, latency | LangSmith | Enough to debug a take-home |
+| Observability | One JSON line: question, job id, chunk ids, provider, latency | LangSmith | Enough to debug without a vendor |
 
 Local completion is not an LLM. It scores requirement bullets against retrieved text and writes a structured answer. That is why a frontend CV can look “weak” if the retrieved chunks never mention Jest or Redux — I retrieve more chunks for fit/gap questions to reduce that. Ollama/Gemini is the path for a narrative answer.
 
