@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "inspect:ingest": "tsx scripts/inspect-ingest.ts",
     "verify:retrieval": "tsx scripts/verify-retrieval.ts",
+    "example:chat": "tsx scripts/example-chat.ts",
     "test": "vitest run"
   },
   "keywords": [],
