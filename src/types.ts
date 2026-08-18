@@ -1,0 +1,72 @@
+export type DocumentSource = "resume" | "job";
+
+export type LlmProvider = "ollama" | "gemini";
+
+export interface BaseDocument {
+  id: string;
+  title: string;
+  fileName: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface ResumeDocument extends BaseDocument {
+  source: "resume";
+}
+
+export interface JobDocument extends BaseDocument {
+  source: "job";
+  jobId: string;
+  company: string;
+}
+
+export type CareerDocument = ResumeDocument | JobDocument;
+
+export interface ChunkMetadata {
+  source: DocumentSource;
+  documentId: string;
+  chunkIndex: number;
+  startChar: number;
+  endChar: number;
+  title: string;
+  jobId?: string;
+}
+
+export interface DocumentChunk {
+  id: string;
+  text: string;
+  metadata: ChunkMetadata;
+}
+
+export interface Citation {
+  chunkId: string;
+  source: DocumentSource;
+  title: string;
+  quote: string;
+  jobId?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+}
+
+export interface ChatRequest {
+  message: string;
+  selectedJobId?: string;
+  history?: ChatMessage[];
+}
+
+export interface ChatResponse {
+  answer: string;
+  citations: Citation[];
+  selectedJobId?: string;
+  retrievedChunkIds?: string[];
+}
+
+export interface Llm {
+  embed(texts: string[]): Promise<number[][]>;
+  complete(prompt: string): Promise<string>;
+}
