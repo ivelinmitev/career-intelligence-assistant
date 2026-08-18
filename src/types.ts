@@ -1,6 +1,6 @@
 export type DocumentSource = "resume" | "job";
 
-export type LlmProvider = "ollama" | "gemini";
+export type LlmProvider = "ollama" | "gemini" | "local";
 
 export interface BaseDocument {
   id: string;
@@ -69,4 +69,28 @@ export interface ChatResponse {
 export interface Llm {
   embed(texts: string[]): Promise<number[][]>;
   complete(prompt: string): Promise<string>;
+}
+
+export interface EmbeddedChunk {
+  chunk: DocumentChunk;
+  embedding: number[];
+}
+
+export interface RetrievalRequest {
+  query: string;
+  selectedJobId?: string;
+  availableJobIds?: string[];
+}
+
+export interface ScoredChunk {
+  chunk: DocumentChunk;
+  score: number;
+}
+
+export interface RetrievalResult {
+  query: string;
+  selectedJobId: string;
+  chunks: ScoredChunk[];
+  citations: Citation[];
+  retrievedChunkIds: string[];
 }
