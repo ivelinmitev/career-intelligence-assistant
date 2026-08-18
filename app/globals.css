@@ -225,9 +225,14 @@ textarea:disabled {
   margin-top: 4px;
   padding: 10px 14px;
   border-radius: 999px;
-  border: 1px dashed var(--border);
-  color: var(--muted);
+  border: 1px solid var(--border);
+  color: var(--text);
   background: rgba(15, 23, 42, 0.55);
+  cursor: pointer;
+}
+
+.upload-button:hover {
+  border-color: rgba(56, 189, 248, 0.45);
 }
 
 .upload-button input {
@@ -387,6 +392,12 @@ textarea:disabled {
   background: var(--accent);
   color: #082f49;
   font-weight: 700;
+}
+
+.notice-banner {
+  margin: 10px 0 0;
+  color: var(--accent);
+  font-size: 0.9rem;
 }
 
 .error-banner {

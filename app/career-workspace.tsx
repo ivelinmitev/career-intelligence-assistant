@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, KeyboardEvent, useMemo, useState } from "react";
 
 import type {
   ChatResponse,
   Citation,
+  DocumentsState,
   JobDocument,
   ResumeDocument,
 } from "@/src/types";
@@ -15,7 +16,7 @@ const PROMPT_CHIPS = [
   "Give me interview preparation questions for Job 2",
 ];
 
-const RESUME_SKILLS = [
+const SAMPLE_RESUME_SKILLS = [
   "TypeScript",
   "React",
   "Next.js",
@@ -45,19 +46,95 @@ function createId(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function jobLabel(jobId: string): string {
+  return jobId.replace("job-", "Job ");
+}
+
 export function CareerWorkspace({ resume, jobs }: CareerWorkspaceProps) {
+  const [currentResume, setCurrentResume] = useState(resume);
+  const [currentJobs, setCurrentJobs] = useState(jobs);
   const [selectedJobId, setSelectedJobId] = useState(
     jobs.find((job) => job.jobId === "job-2")?.jobId ?? jobs[0]?.jobId ?? "",
   );
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [isSending, setIsSending] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const selectedJob = useMemo(
-    () => jobs.find((job) => job.jobId === selectedJobId) ?? jobs[0],
-    [jobs, selectedJobId],
+    () => currentJobs.find((job) => job.jobId === selectedJobId) ?? currentJobs[0],
+    [currentJobs, selectedJobId],
   );
+
+  function applyDocuments(state: DocumentsState, uploadedJobId?: string) {
+    if (state.resume) {
+      setCurrentResume(state.resume);
+    }
+    setCurrentJobs(state.jobs);
+    if (uploadedJobId) {
+      setSelectedJobId(uploadedJobId);
+      return;
+    }
+    if (!state.jobs.some((job) => job.jobId === selectedJobId)) {
+      setSelectedJobId(state.jobs[0]?.jobId ?? "");
+    }
+  }
+
+  async function uploadFiles(kind: "resume" | "job", files: FileList | null) {
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    setError(null);
+    setNotice(null);
+    setIsUploading(true);
+
+    try {
+      let latestJobId: string | undefined;
+      let latestState: DocumentsState | null = null;
+
+      for (const file of Array.from(files)) {
+        const form = new FormData();
+        form.append("kind", kind);
+        form.append("file", file);
+
+        const response = await fetch("/api/documents", {
+          method: "POST",
+          body: form,
+        });
+        const payload = (await response.json()) as DocumentsState & {
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Upload failed.");
+        }
+
+        const state = payload as DocumentsState;
+        latestState = state;
+        if (kind === "job") {
+          latestJobId = state.jobs.at(-1)?.jobId;
+        }
+      }
+
+      if (latestState) {
+        applyDocuments(latestState, latestJobId);
+        setNotice(
+          kind === "resume"
+            ? "Resume replaced and re-ingested for retrieval."
+            : `Added ${files.length === 1 ? "a job" : `${files.length} jobs`} and selected ${latestJobId ? jobLabel(latestJobId) : "the new role"}.`,
+        );
+      }
+    } catch (uploadError: unknown) {
+      setError(
+        uploadError instanceof Error ? uploadError.message : "Upload failed.",
+      );
+    } finally {
+      setIsUploading(false);
+    }
+  }
 
   async function sendMessage(text: string) {
     const message = text.trim();
@@ -124,6 +201,22 @@ export function CareerWorkspace({ resume, jobs }: CareerWorkspaceProps) {
     }
   }
 
+  function onResumeChange(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.target;
+    void uploadFiles("resume", input.files).finally(() => {
+      input.value = "";
+    });
+  }
+
+  function onJobsChange(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.target;
+    void uploadFiles("job", input.files).finally(() => {
+      input.value = "";
+    });
+  }
+
+  const resumeIsSample = currentResume.id === "resume-sample";
+
   return (
     <main className="app-shell">
       <section className="hero">
@@ -148,32 +241,39 @@ export function CareerWorkspace({ resume, jobs }: CareerWorkspaceProps) {
                 One candidate profile for every comparison.
               </p>
             </div>
-            <span className="status-pill">Loaded</span>
+            <span className="status-pill">
+              {resumeIsSample ? "Sample" : "Uploaded"}
+            </span>
           </div>
 
           <article className="card resume-card">
-            <p className="card-kicker">Sample candidate</p>
-            <h3>{resume.title}</h3>
-            <p>{previewText(resume.text, 220)}</p>
+            <p className="card-kicker">
+              {resumeIsSample ? "Sample candidate" : "Uploaded resume"}
+            </p>
+            <h3>{currentResume.title}</h3>
+            <p>{previewText(currentResume.text, 220)}</p>
             <div className="meta-row">
-              {RESUME_SKILLS.map((skill) => (
-                <span key={skill} className="tag">
-                  {skill}
-                </span>
-              ))}
+              {(resumeIsSample ? SAMPLE_RESUME_SKILLS : [currentResume.fileName]).map(
+                (skill) => (
+                  <span key={skill} className="tag">
+                    {skill}
+                  </span>
+                ),
+              )}
             </div>
           </article>
 
           <label className="upload-button">
-            Replace resume
+            {isUploading ? "Uploading…" : "Replace resume"}
             <input
               type="file"
               accept=".pdf,.txt,.md,.markdown,application/pdf"
-              disabled
+              disabled={isUploading}
+              onChange={onResumeChange}
             />
           </label>
           <p className="hint">
-            Sample resume is ready for chat. File ingest comes next.
+            PDF, Markdown, or text. Replacing the resume re-chunks it for chat.
           </p>
         </aside>
 
@@ -185,11 +285,11 @@ export function CareerWorkspace({ resume, jobs }: CareerWorkspaceProps) {
                 Select a role to scope retrieval.
               </p>
             </div>
-            <span className="status-pill">{jobs.length} roles</span>
+            <span className="status-pill">{currentJobs.length} roles</span>
           </div>
 
           <div className="job-list">
-            {jobs.map((job) => {
+            {currentJobs.map((job) => {
               const isActive = job.jobId === selectedJob?.jobId;
               return (
                 <button
@@ -203,7 +303,7 @@ export function CareerWorkspace({ resume, jobs }: CareerWorkspaceProps) {
                       <h3>{job.title}</h3>
                       <p>{job.company}</p>
                     </div>
-                    <span className="tag">{job.jobId.replace("job-", "Job ")}</span>
+                    <span className="tag">{jobLabel(job.jobId)}</span>
                   </header>
                   <p>{previewText(job.text)}</p>
                 </button>
@@ -212,15 +312,17 @@ export function CareerWorkspace({ resume, jobs }: CareerWorkspaceProps) {
           </div>
 
           <label className="upload-button">
-            Add job description
+            {isUploading ? "Uploading…" : "Add job description"}
             <input
               type="file"
               accept=".pdf,.txt,.md,.markdown,application/pdf"
-              disabled
+              disabled={isUploading}
+              multiple
+              onChange={onJobsChange}
             />
           </label>
           <p className="hint">
-            Three sample jobs are loaded. Extra uploads come next.
+            Add one or more files. New jobs keep Job 1, Job 2, … IDs for chat.
           </p>
         </section>
 
@@ -233,9 +335,7 @@ export function CareerWorkspace({ resume, jobs }: CareerWorkspaceProps) {
               </p>
             </div>
             <span className="status-pill">
-              {selectedJob
-                ? selectedJob.jobId.replace("job-", "Job ")
-                : "No job"}
+              {selectedJob ? jobLabel(selectedJob.jobId) : "No job"}
             </span>
           </div>
 
@@ -279,7 +379,9 @@ export function CareerWorkspace({ resume, jobs }: CareerWorkspaceProps) {
                         <span className="source-badge">
                           {citation.source === "resume"
                             ? "Resume"
-                            : citation.jobId?.replace("job-", "Job ") ?? "Job"}
+                            : citation.jobId
+                              ? jobLabel(citation.jobId)
+                              : "Job"}
                         </span>
                         <strong>{citation.title}</strong>
                         <p>{previewText(citation.quote, 220)}</p>
@@ -298,6 +400,7 @@ export function CareerWorkspace({ resume, jobs }: CareerWorkspaceProps) {
             ) : null}
           </div>
 
+          {notice ? <p className="notice-banner">{notice}</p> : null}
           {error ? <p className="error-banner">{error}</p> : null}
 
           <form className="composer" onSubmit={onSubmit}>
