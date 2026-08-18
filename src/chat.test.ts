@@ -4,6 +4,7 @@ import { answerQuestion } from "@/src/chat";
 import { EMPTY_CONTEXT_ANSWER } from "@/src/generate";
 import { chunkDocuments } from "@/src/ingest";
 import { createLlm } from "@/src/llm";
+import type { ChatLogEvent } from "@/src/observe";
 import { buildVectorStoreFromChunks } from "@/src/retrieve";
 import type { JobDocument, Llm, ResumeDocument } from "@/src/types";
 import { InMemoryVectorStore } from "@/src/vector-store";
@@ -76,16 +77,17 @@ describe("answerQuestion", () => {
     );
   });
 
-  it("does not call the LLM when the store is empty", async () => {
+  it("returns a safe response when no relevant documents are available", async () => {
     const llm = new RecordingLlm();
     const store = new InMemoryVectorStore();
+    const logs: ChatLogEvent[] = [];
 
     const result = await answerQuestion(
       {
         message: "What skills am I missing for this role?",
         selectedJobId: "job-2",
       },
-      { llm, store },
+      { llm, store, logger: (event) => logs.push(event) },
     );
 
     expect(llm.completeCalls).toBe(0);
@@ -93,5 +95,11 @@ describe("answerQuestion", () => {
     expect(result.citations).toEqual([]);
     expect(result.retrievedChunkIds).toEqual([]);
     expect(result.selectedJobId).toBe("job-2");
+    expect(logs).toHaveLength(1);
+    expect(logs[0]?.question).toBe("What skills am I missing for this role?");
+    expect(logs[0]?.selectedJobId).toBe("job-2");
+    expect(logs[0]?.retrievedChunkIds).toEqual([]);
+    expect(logs[0]?.provider).toBe("local");
+    expect(logs[0]?.latencyMs).toBeGreaterThanOrEqual(0);
   });
 });
