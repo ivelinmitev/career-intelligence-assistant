@@ -63,7 +63,9 @@ export interface ChatResponse {
   answer: string;
   citations: Citation[];
   selectedJobId?: string;
-  retrievedChunkIds?: string[];
+  retrievedChunkIds: string[];
+  provider: LlmProvider;
+  latencyMs: number;
 }
 
 export interface Llm {
