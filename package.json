@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "inspect:ingest": "tsx scripts/inspect-ingest.ts"
+    "inspect:ingest": "tsx scripts/inspect-ingest.ts",
+    "verify:retrieval": "tsx scripts/verify-retrieval.ts",
+    "test": "vitest run"
   },
   "keywords": [],
   "author": "",
@@ -27,6 +29,7 @@
     "eslint": "^10.8.1",
     "eslint-config-next": "^16.3.1",
     "tsx": "^4.23.12",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   }
 }
