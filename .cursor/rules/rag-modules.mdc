@@ -1,0 +1,22 @@
+---
+description: Job-scoped RAG and Llm boundary for server modules
+globs: src/**/*.ts
+alwaysApply: false
+---
+
+# RAG and LLM modules
+
+- Chunks carry `source` and `jobId`. Retrieval filters to resume + selected job before ranking.
+- Resolve target job from `"Job N"` in the question, then `selectedJobId`.
+- Rebuild the in-memory session store after resume replace or job add. Do not persist uploads to disk.
+- `observe.ts` logs chat events. Do not add a metrics vendor.
+- Keep `src/types.ts` as the single types file for Document, Chunk, Citation, ChatRequest/Response, Llm.
+
+```ts
+// ❌ BAD — dump every job into the prompt
+complete(resumeText + allJobs.join("\n") + question)
+
+// ✅ GOOD — retrieve, then generate
+const retrieval = await retrieveForJob(store, { query, selectedJobId }, llm);
+const answer = await generateAnswer(query, retrieval, llm);
+```

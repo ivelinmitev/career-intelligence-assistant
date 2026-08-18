@@ -1,0 +1,14 @@
+---
+description: Spec-first Career Intelligence Assistant constitution for every session
+alwaysApply: true
+---
+
+# Spec-first platform
+
+- Read `.specify/memory/constitution.md` and the active `specs/*/spec.md` before changing behavior.
+- Job-scoped RAG only: resume + one job. Never mix Job 1 into Job 2.
+- Ground answers in retrieved chunks. Empty retrieval refuses; do not invent skills or requirements.
+- Call models only through `Llm` (`embed`, `complete`). Keep Ollama, Gemini, and local swappable. No paid OpenAI requirement.
+- No LangChain, Pinecone, auth, or cloud unless a spec amends the constitution.
+- Log chat as one JSON line: question, selectedJobId, retrievedChunkIds, provider, latencyMs.
+- Do not write the polished submission README. Do not add `Co-authored-by: Cursor` to commits.

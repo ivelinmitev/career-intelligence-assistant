@@ -1,0 +1,13 @@
+---
+description: App Router UI and route handler conventions
+globs: app/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# App Router conventions
+
+- Keep the 3-pane product UI: resume, jobs, chat + citations.
+- `POST /api/chat` accepts `{ message, selectedJobId? }` and returns answer, citations, debug fields.
+- `GET/POST /api/documents` is the session API. Uploads are multipart `kind` + `file`.
+- Client components fetch those routes. Do not call Ollama or Gemini from the browser.
+- Upload replace is one resume; jobs append with the next `job-N` id.
