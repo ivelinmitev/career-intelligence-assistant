@@ -12,6 +12,7 @@ export interface BaseDocument {
 
 export interface ResumeDocument extends BaseDocument {
   source: "resume";
+  candidateId: string;
 }
 
 export interface JobDocument extends BaseDocument {
@@ -35,6 +36,7 @@ export interface ChunkMetadata {
   endChar: number;
   title: string;
   jobId?: string;
+  candidateId?: string;
 }
 
 export interface DocumentChunk {
@@ -61,6 +63,7 @@ export interface ChatMessage {
 export interface ChatRequest {
   message: string;
   selectedJobId?: string;
+  selectedCandidateId?: string;
   history?: ChatMessage[];
 }
 
@@ -68,6 +71,7 @@ export interface ChatResponse {
   answer: string;
   citations: Citation[];
   selectedJobId?: string;
+  selectedCandidateId?: string;
   retrievedChunkIds: string[];
   provider: LlmProvider;
   latencyMs: number;
@@ -86,6 +90,7 @@ export interface EmbeddedChunk {
 export interface RetrievalRequest {
   query: string;
   selectedJobId?: string;
+  selectedCandidateId?: string;
   availableJobIds?: string[];
 }
 
@@ -97,6 +102,7 @@ export interface ScoredChunk {
 export interface RetrievalResult {
   query: string;
   selectedJobId: string;
+  selectedCandidateId: string;
   chunks: ScoredChunk[];
   citations: Citation[];
   retrievedChunkIds: string[];

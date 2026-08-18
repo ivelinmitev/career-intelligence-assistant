@@ -37,11 +37,12 @@ async function main() {
   console.log(
     JSON.stringify(
       {
-        resume: {
-          id: state.resume?.id,
-          title: state.resume?.title,
-          fileName: state.resume?.fileName,
-        },
+        resume: state.resume
+          ? {
+              title: state.resume.title,
+              fileName: state.resume.fileName,
+            }
+          : null,
         jobs: state.jobs.map((job) => ({
           jobId: job.jobId,
           title: job.title,

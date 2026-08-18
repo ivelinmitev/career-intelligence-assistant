@@ -32,6 +32,7 @@ export function buildGroundedPrompt(
     "Keep the answer job-scoped: do not mix in other jobs.",
     "",
     `Selected job: ${retrieval.selectedJobId}`,
+    `Selected candidate: ${retrieval.selectedCandidateId}`,
     "",
     "Retrieved context:",
     context,

@@ -10,7 +10,8 @@ import type { JobDocument, Llm, ResumeDocument } from "@/src/types";
 import { InMemoryVectorStore } from "@/src/vector-store";
 
 const sampleResume: ResumeDocument = {
-  id: "resume-sample",
+  id: "candidate-1",
+  candidateId: "candidate-1",
   source: "resume",
   title: "Alex Morgan",
   fileName: "resume.md",

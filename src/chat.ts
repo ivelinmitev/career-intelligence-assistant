@@ -1,5 +1,5 @@
 import { generateAnswer } from "@/src/generate";
-import { createLlm, getLlmProviderFromEnv } from "@/src/llm";
+import { createLlm, getLlmProviderFromEnv, resolveLlmProvider } from "@/src/llm";
 import { logChatEvent, type ChatLogEvent } from "@/src/observe";
 import { retrieveForJob } from "@/src/retrieve";
 import { getSessionStore } from "@/src/session";
@@ -19,7 +19,9 @@ export async function answerQuestion(
   },
 ): Promise<ChatResponse> {
   const startedAt = Date.now();
-  const provider = getLlmProviderFromEnv();
+  const provider = options?.llm
+    ? getLlmProviderFromEnv()
+    : await resolveLlmProvider();
   const llm = options?.llm ?? createLlm(provider);
   const store = options?.store ?? (await getDefaultStore(llm));
   const logger = options?.logger ?? logChatEvent;
@@ -30,6 +32,7 @@ export async function answerQuestion(
     {
       query: message,
       selectedJobId: request.selectedJobId,
+      selectedCandidateId: request.selectedCandidateId,
     },
     llm,
   );
@@ -51,6 +54,7 @@ export async function answerQuestion(
     answer,
     citations: emptyRetrieval ? [] : retrieval.citations,
     selectedJobId: retrieval.selectedJobId,
+    selectedCandidateId: retrieval.selectedCandidateId,
     retrievedChunkIds,
     provider,
     latencyMs,

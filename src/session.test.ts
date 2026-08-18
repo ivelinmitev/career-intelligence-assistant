@@ -37,7 +37,7 @@ describe("document session uploads", () => {
     await addJob("uploaded-job.md", jobBuffer, llm);
 
     const state = await getDocumentsState(llm);
-    expect(state.resume?.title).toContain("Jordan Lee");
+    expect(state.resume?.title.includes("Jordan Lee")).toBe(true);
     expect(state.jobs.map((job) => job.jobId)).toContain("job-4");
 
     const jobFour = state.jobs.find((job) => job.jobId === "job-4");

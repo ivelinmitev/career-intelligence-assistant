@@ -20,6 +20,13 @@ function isChatRequest(value: unknown): value is ChatRequest {
     return false;
   }
 
+  if (
+    body.selectedCandidateId !== undefined &&
+    typeof body.selectedCandidateId !== "string"
+  ) {
+    return false;
+  }
+
   return true;
 }
 
@@ -39,6 +46,7 @@ export async function POST(request: Request) {
     const result = await answerQuestion({
       message: body.message,
       selectedJobId: body.selectedJobId,
+      selectedCandidateId: body.selectedCandidateId,
     });
 
     return NextResponse.json(result);

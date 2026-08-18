@@ -48,9 +48,9 @@ export async function POST(request: Request) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const documents =
-      kind === "resume"
-        ? await replaceResume(file.name, buffer)
-        : await addJob(file.name, buffer);
+      kind === "job"
+        ? await addJob(file.name, buffer)
+        : await replaceResume(file.name, buffer);
 
     return NextResponse.json({
       uploaded: kind,

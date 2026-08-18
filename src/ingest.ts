@@ -57,6 +57,17 @@ function jobIdFromFileName(fileName: string): string {
   return path.basename(fileName, path.extname(fileName));
 }
 
+export function allocateCandidateId(existingCandidateIds: string[]): string {
+  const numbers = existingCandidateIds
+    .map((id) => {
+      const match = id.match(/^candidate-(\d+)$/i);
+      return match ? Number(match[1]) : 0;
+    })
+    .filter((value) => value > 0);
+  const next = (numbers.length ? Math.max(...numbers) : 0) + 1;
+  return `candidate-${next}`;
+}
+
 export function allocateJobId(existingJobIds: string[], fileName: string): string {
   const fromName = jobIdFromFileName(fileName).toLowerCase();
   if (/^job-\d+$/.test(fromName) && !existingJobIds.includes(fromName)) {
@@ -155,7 +166,9 @@ export function chunkDocument(
       startChar: chunk.startChar,
       endChar: chunk.endChar,
       title: document.title,
-      ...(document.source === "job" ? { jobId: document.jobId } : {}),
+      ...(document.source === "job"
+        ? { jobId: document.jobId }
+        : { candidateId: document.candidateId }),
     },
   }));
 }
@@ -167,13 +180,17 @@ export function chunkDocuments(
   return documents.flatMap((document) => chunkDocument(document, options));
 }
 
-async function readResumeDocument(filePath: string): Promise<ResumeDocument> {
+async function readResumeDocument(
+  filePath: string,
+  candidateId: string,
+): Promise<ResumeDocument> {
   const fileName = path.basename(filePath);
   const text = await parseDocumentFile(filePath);
   const title = titleFromMarkdownHeading(text, "Sample resume");
 
   return {
-    id: "resume-sample",
+    id: candidateId,
+    candidateId,
     source: "resume",
     title,
     fileName,
@@ -211,7 +228,10 @@ export async function loadSampleDocuments(): Promise<CareerDocument[]> {
     throw new Error(`No resume sample found in ${resumeDir}`);
   }
 
-  const resume = await readResumeDocument(path.join(resumeDir, resumeFiles[0]!));
+  const resume = await readResumeDocument(
+    path.join(resumeDir, resumeFiles[0]!),
+    "candidate-1",
+  );
 
   const jobFiles = (await fs.readdir(jobsDir))
     .filter((file) => file.endsWith(".md") || file.endsWith(".txt") || file.endsWith(".pdf"))
@@ -232,14 +252,16 @@ export async function loadDocumentFromUpload(
   fileName: string,
   buffer: Buffer,
   kind: "resume" | "job",
-  jobId?: string,
+  id?: string,
 ): Promise<CareerDocument> {
   const text = await parseDocumentBuffer(fileName, buffer);
   const createdAt = new Date().toISOString();
 
   if (kind === "resume") {
+    const candidateId = id ?? "candidate-uploaded";
     return {
-      id: "resume-uploaded",
+      id: candidateId,
+      candidateId,
       source: "resume",
       title: titleFromMarkdownHeading(text, fileName),
       fileName,
@@ -248,7 +270,7 @@ export async function loadDocumentFromUpload(
     };
   }
 
-  const resolvedJobId = jobId ?? jobIdFromFileName(fileName);
+  const resolvedJobId = id ?? jobIdFromFileName(fileName);
 
   return {
     id: resolvedJobId,

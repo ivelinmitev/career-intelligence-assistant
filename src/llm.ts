@@ -1,4 +1,5 @@
 import { localEmbedTexts } from "@/src/embeddings";
+import { completeFromRetrievedContext } from "@/src/local-complete";
 import type { Llm, LlmProvider } from "@/src/types";
 
 const DEFAULT_OLLAMA_HOST = "http://localhost:11434";
@@ -6,30 +7,6 @@ const DEFAULT_OLLAMA_EMBED_MODEL = "nomic-embed-text";
 const DEFAULT_OLLAMA_CHAT_MODEL = "llama3.2";
 const DEFAULT_GEMINI_EMBED_MODEL = "text-embedding-004";
 const DEFAULT_GEMINI_CHAT_MODEL = "gemini-2.0-flash";
-
-function completeFromRetrievedContext(prompt: string): string {
-  const contextMatch = prompt.match(
-    /Retrieved context:\n([\s\S]*?)\n\nQuestion:\n([\s\S]*)$/,
-  );
-  const context = contextMatch?.[1]?.trim() ?? "";
-  const question = contextMatch?.[2]?.trim() ?? "";
-
-  if (!context) {
-    return "The answer is not in the uploaded or provided documents.";
-  }
-
-  return [
-    "Based only on the retrieved documents:",
-    "",
-    context,
-    "",
-    question
-      ? `The question was: ${question}`
-      : "No additional skills or requirements are assumed beyond the excerpts above.",
-    "",
-    "This answer does not invent skills or requirements that are missing from those excerpts.",
-  ].join("\n");
-}
 
 export class LocalLlm implements Llm {
   readonly provider: LlmProvider = "local";
@@ -210,6 +187,37 @@ export function getLlmProviderFromEnv(): LlmProvider {
   const provider = process.env.LLM_PROVIDER ?? "local";
   if (provider === "gemini" || provider === "ollama" || provider === "local") {
     return provider;
+  }
+
+  return "local";
+}
+
+export async function isOllamaAvailable(
+  host = process.env.OLLAMA_HOST ?? DEFAULT_OLLAMA_HOST,
+): Promise<boolean> {
+  try {
+    const response = await fetch(`${host}/api/tags`, {
+      signal: AbortSignal.timeout(400),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `LLM_PROVIDER=auto` (or unset in the chat path) uses Ollama when it is
+ * reachable, otherwise the offline local completer. Explicit local/ollama/gemini
+ * always wins. Tests that pass an Llm never hit this probe.
+ */
+export async function resolveLlmProvider(): Promise<LlmProvider> {
+  const requested = process.env.LLM_PROVIDER ?? "auto";
+  if (requested === "gemini" || requested === "ollama" || requested === "local") {
+    return requested;
+  }
+
+  if (requested === "auto" && (await isOllamaAvailable())) {
+    return "ollama";
   }
 
   return "local";

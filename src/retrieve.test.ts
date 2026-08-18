@@ -6,12 +6,14 @@ import { createLlm } from "@/src/llm";
 import {
   buildVectorStoreFromChunks,
   chunkMatchesJobScope,
+  isComparativeReviewQuery,
   retrieveForJob,
 } from "@/src/retrieve";
 import type { DocumentChunk, JobDocument, ResumeDocument } from "@/src/types";
 
 const sampleResume: ResumeDocument = {
-  id: "resume-sample",
+  id: "candidate-1",
+  candidateId: "candidate-1",
   source: "resume",
   title: "Alex Morgan",
   fileName: "resume.md",
@@ -86,6 +88,18 @@ describe("chunkMatchesJobScope", () => {
     expect(jobTwoChunk).toBeDefined();
     expect(chunkMatchesJobScope(jobOneChunk!, "job-2")).toBe(false);
     expect(chunkMatchesJobScope(jobTwoChunk!, "job-2")).toBe(true);
+  });
+});
+
+describe("isComparativeReviewQuery", () => {
+  it("detects fit and gap style prompts", () => {
+    expect(isComparativeReviewQuery("Is this candidate okay for the selected job?")).toBe(
+      true,
+    );
+    expect(isComparativeReviewQuery("What skills am I missing for this role?")).toBe(
+      true,
+    );
+    expect(isComparativeReviewQuery("Tell me about the company culture")).toBe(false);
   });
 });
 

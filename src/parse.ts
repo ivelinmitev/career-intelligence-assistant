@@ -1,8 +1,22 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { PDFParse } from "pdf-parse";
+import { pathToFileURL } from "node:url";
 
 const TEXT_EXTENSIONS = new Set([".txt", ".md", ".markdown"]);
+
+let pdfWorkerConfigured = false;
+
+async function loadPdfParser() {
+  const { PDFParse } = await import("pdf-parse");
+
+  if (!pdfWorkerConfigured) {
+    const { getPath } = await import("pdf-parse/worker");
+    PDFParse.setWorker(pathToFileURL(getPath()).href);
+    pdfWorkerConfigured = true;
+  }
+
+  return PDFParse;
+}
 
 export function isSupportedDocumentPath(filePath: string): boolean {
   const ext = path.extname(filePath).toLowerCase();
@@ -10,6 +24,7 @@ export function isSupportedDocumentPath(filePath: string): boolean {
 }
 
 export async function parsePdf(buffer: Buffer): Promise<string> {
+  const PDFParse = await loadPdfParser();
   const parser = new PDFParse({ data: buffer });
 
   try {

@@ -9,6 +9,6 @@
 - [x] Swappable Llm (local / ollama / gemini)
 - [x] Chat JSON log line
 - [x] Focused Vitest coverage
-- [ ] Docker for the Next app (env outside image)
-- [ ] Human-written README
-- [ ] Screenshot set for submission
+- [x] Docker for the Next app (env outside image)
+- [x] README with clone → run and architecture
+- [x] Screenshot set for submission

@@ -1,6 +1,14 @@
 "use client";
 
-import { ChangeEvent, FormEvent, KeyboardEvent, useMemo, useState } from "react";
+import {
+  ChangeEvent,
+  FormEvent,
+  KeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type {
   ChatResponse,
@@ -11,18 +19,12 @@ import type {
 } from "@/src/types";
 
 const PROMPT_CHIPS = [
+  "How does my experience align with Job 2?",
   "What skills am I missing for this role?",
-  "How does my experience align with this job?",
   "Give me interview preparation questions for Job 2",
 ];
 
-const SAMPLE_RESUME_SKILLS = [
-  "TypeScript",
-  "React",
-  "Next.js",
-  "Node.js",
-  "PostgreSQL",
-];
+const DEMO_ORG = "Northstar Talent";
 
 interface CareerWorkspaceProps {
   resume: ResumeDocument;
@@ -35,6 +37,7 @@ interface ThreadMessage {
   content: string;
   citations?: Citation[];
   selectedJobId?: string;
+  sentAt: number;
 }
 
 function previewText(text: string, max = 180): string {
@@ -47,26 +50,152 @@ function createId(): string {
 }
 
 function jobLabel(jobId: string): string {
-  return jobId.replace("job-", "Job ");
+  return jobId.replace("job-", "Req ");
+}
+
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+function formatTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function normalizeDocumentsState(payload: unknown): DocumentsState {
+  if (!payload || typeof payload !== "object") {
+    return { resume: null, jobs: [] };
+  }
+
+  const state = payload as Partial<DocumentsState> & {
+    candidates?: ResumeDocument[];
+  };
+
+  if ("resume" in state || Array.isArray(state.jobs)) {
+    return {
+      resume: state.resume ?? null,
+      jobs: Array.isArray(state.jobs) ? state.jobs : [],
+    };
+  }
+
+  if (Array.isArray(state.candidates)) {
+    return {
+      resume: state.candidates[0] ?? null,
+      jobs: Array.isArray(state.jobs) ? state.jobs : [],
+    };
+  }
+
+  return { resume: null, jobs: [] };
+}
+
+function IconRoles() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M20 6h-4V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zM10 4h4v2h-4V4z" />
+    </svg>
+  );
+}
+
+function IconResume() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
+    </svg>
+  );
+}
+
+function IconSend() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z" />
+    </svg>
+  );
 }
 
 export function CareerWorkspace({ resume, jobs }: CareerWorkspaceProps) {
   const [currentResume, setCurrentResume] = useState(resume);
-  const [currentJobs, setCurrentJobs] = useState(jobs);
-  const [selectedJobId, setSelectedJobId] = useState(
-    jobs.find((job) => job.jobId === "job-2")?.jobId ?? jobs[0]?.jobId ?? "",
-  );
+  const [currentJobs, setCurrentJobs] = useState(jobs ?? []);
+  const [selectedJobId, setSelectedJobId] = useState<string>("job-2");
+  const [jobFilter, setJobFilter] = useState("");
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [llmProvider, setLlmProvider] = useState<string | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const selectedJob = useMemo(
-    () => currentJobs.find((job) => job.jobId === selectedJobId) ?? currentJobs[0],
+    () => currentJobs.find((job) => job.jobId === selectedJobId),
     [currentJobs, selectedJobId],
   );
+
+  const reviewReady = Boolean(selectedJob && currentResume);
+
+  const filteredJobs = useMemo(() => {
+    const query = jobFilter.trim().toLowerCase();
+    if (!query) {
+      return currentJobs;
+    }
+    return currentJobs.filter(
+      (job) =>
+        job.title.toLowerCase().includes(query) ||
+        job.company.toLowerCase().includes(query) ||
+        job.jobId.toLowerCase().includes(query),
+    );
+  }, [currentJobs, jobFilter]);
+
+  const latestCitations = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message.role === "assistant" && message.citations?.length) {
+        return message.citations;
+      }
+    }
+    return [];
+  }, [messages]);
+
+  useEffect(() => {
+    void fetch("/api/documents")
+      .then(async (response) => {
+        if (!response.ok) {
+          return;
+        }
+        const state = normalizeDocumentsState(await response.json());
+        if (state.resume) {
+          setCurrentResume(state.resume);
+        }
+        if (state.jobs.length > 0) {
+          setCurrentJobs(state.jobs);
+        }
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isSending]);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      return;
+    }
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+  }, [draft]);
+
+  useEffect(() => {
+    setMessages([]);
+  }, [selectedJobId]);
 
   function applyDocuments(state: DocumentsState, uploadedJobId?: string) {
     if (state.resume) {
@@ -75,58 +204,36 @@ export function CareerWorkspace({ resume, jobs }: CareerWorkspaceProps) {
     setCurrentJobs(state.jobs);
     if (uploadedJobId) {
       setSelectedJobId(uploadedJobId);
-      return;
-    }
-    if (!state.jobs.some((job) => job.jobId === selectedJobId)) {
-      setSelectedJobId(state.jobs[0]?.jobId ?? "");
     }
   }
 
-  async function uploadFiles(kind: "resume" | "job", files: FileList | null) {
-    if (!files || files.length === 0) {
-      return;
-    }
-
+  async function uploadFile(kind: "resume" | "job", file: File) {
     setError(null);
     setNotice(null);
     setIsUploading(true);
 
     try {
-      let latestJobId: string | undefined;
-      let latestState: DocumentsState | null = null;
+      const form = new FormData();
+      form.append("kind", kind);
+      form.append("file", file);
 
-      for (const file of Array.from(files)) {
-        const form = new FormData();
-        form.append("kind", kind);
-        form.append("file", file);
+      const response = await fetch("/api/documents", {
+        method: "POST",
+        body: form,
+      });
+      const payload = (await response.json()) as DocumentsState & { error?: string };
 
-        const response = await fetch("/api/documents", {
-          method: "POST",
-          body: form,
-        });
-        const payload = (await response.json()) as DocumentsState & {
-          error?: string;
-        };
-
-        if (!response.ok) {
-          throw new Error(payload.error ?? "Upload failed.");
-        }
-
-        const state = payload as DocumentsState;
-        latestState = state;
-        if (kind === "job") {
-          latestJobId = state.jobs.at(-1)?.jobId;
-        }
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Upload failed.");
       }
 
-      if (latestState) {
-        applyDocuments(latestState, latestJobId);
-        setNotice(
-          kind === "resume"
-            ? "Resume replaced and re-ingested for retrieval."
-            : `Added ${files.length === 1 ? "a job" : `${files.length} jobs`} and selected ${latestJobId ? jobLabel(latestJobId) : "the new role"}.`,
-        );
-      }
+      const state = normalizeDocumentsState(payload);
+      applyDocuments(state, kind === "job" ? state.jobs.at(-1)?.jobId : undefined);
+      setNotice(
+        kind === "resume"
+          ? "Resume replaced — chat now uses your uploaded CV."
+          : `Requisition added as ${state.jobs.at(-1)?.jobId ?? "new job"}.`,
+      );
     } catch (uploadError: unknown) {
       setError(
         uploadError instanceof Error ? uploadError.message : "Upload failed.",
@@ -138,7 +245,7 @@ export function CareerWorkspace({ resume, jobs }: CareerWorkspaceProps) {
 
   async function sendMessage(text: string) {
     const message = text.trim();
-    if (!message || isSending || !selectedJobId) {
+    if (!message || isSending || !selectedJobId || !currentResume) {
       return;
     }
 
@@ -146,7 +253,7 @@ export function CareerWorkspace({ resume, jobs }: CareerWorkspaceProps) {
     setDraft("");
     setMessages((current) => [
       ...current,
-      { id: createId(), role: "user", content: message },
+      { id: createId(), role: "user", content: message, sentAt: Date.now() },
     ]);
     setIsSending(true);
 
@@ -170,6 +277,7 @@ export function CareerWorkspace({ resume, jobs }: CareerWorkspaceProps) {
       }
 
       const result = payload as ChatResponse;
+      setLlmProvider(result.provider);
       setMessages((current) => [
         ...current,
         {
@@ -178,12 +286,13 @@ export function CareerWorkspace({ resume, jobs }: CareerWorkspaceProps) {
           content: result.answer,
           citations: result.citations,
           selectedJobId: result.selectedJobId,
+          sentAt: Date.now(),
         },
       ]);
     } catch (sendError: unknown) {
-      const nextError =
-        sendError instanceof Error ? sendError.message : "Chat request failed.";
-      setError(nextError);
+      setError(
+        sendError instanceof Error ? sendError.message : "Chat request failed.",
+      );
     } finally {
       setIsSending(false);
     }
@@ -201,232 +310,319 @@ export function CareerWorkspace({ resume, jobs }: CareerWorkspaceProps) {
     }
   }
 
-  function onResumeChange(event: ChangeEvent<HTMLInputElement>) {
-    const input = event.target;
-    void uploadFiles("resume", input.files).finally(() => {
-      input.value = "";
-    });
+  function onResumeUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (file) {
+      void uploadFile("resume", file);
+    }
+    event.target.value = "";
   }
 
-  function onJobsChange(event: ChangeEvent<HTMLInputElement>) {
-    const input = event.target;
-    void uploadFiles("job", input.files).finally(() => {
-      input.value = "";
-    });
+  function onJobUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (file) {
+      void uploadFile("job", file);
+    }
+    event.target.value = "";
   }
-
-  const resumeIsSample = currentResume.id === "resume-sample";
 
   return (
-    <main className="app-shell">
-      <section className="hero">
-        <div>
-          <p className="eyebrow">Career Intelligence Assistant</p>
-          <h1>See how your resume fits each role.</h1>
-          <p>
-            Compare one resume against several job descriptions. Answers stay
-            grounded in those documents, with citations for resume evidence and
-            the selected job.
-          </p>
+    <div className="workspace-shell">
+      <header className="workspace-topbar">
+        <div className="workspace-brand">
+          <strong>{DEMO_ORG}</strong>
+          <span>Career Intelligence · Resume vs job RAG</span>
         </div>
-        <div className="hero-badge">Grounded answers • Job-scoped retrieval</div>
-      </section>
+        <div className="workspace-meta">
+          {llmProvider ? (
+            <span className="workspace-pill">Provider: {llmProvider}</span>
+          ) : null}
+          <span>Grounded answers with citations</span>
+        </div>
+      </header>
 
-      <section className="pane-grid">
-        <aside className="panel">
-          <div className="panel-header">
-            <div>
+      <div className="messenger-app">
+        <nav className="icon-rail" aria-label="Workspace navigation">
+          <div className="rail-logo">CI</div>
+          <button type="button" className="rail-btn active" aria-label="Jobs">
+            <IconRoles />
+          </button>
+          <button type="button" className="rail-btn" aria-label="Resume">
+            <IconResume />
+          </button>
+          <div className="rail-spacer" />
+        </nav>
+
+        <aside className="inbox-panel workflow-panel">
+          <section className="workflow-section">
+            <div className="workflow-section-header">
+              <h2>Jobs</h2>
+              <label className="upload-button compact">
+                {isUploading ? "…" : "+ Add"}
+                <input
+                  type="file"
+                  accept=".pdf,.txt,.md,.markdown,application/pdf"
+                  disabled={isUploading}
+                  onChange={onJobUpload}
+                />
+              </label>
+            </div>
+            <label className="search-box">
+              <span aria-hidden>🔍</span>
+              <input
+                type="search"
+                placeholder="Search jobs"
+                value={jobFilter}
+                onChange={(event) => setJobFilter(event.target.value)}
+              />
+            </label>
+            <div className="inbox-section compact">
+              {filteredJobs.map((job) => {
+                const isActive = job.jobId === selectedJobId;
+                return (
+                  <button
+                    key={job.id}
+                    type="button"
+                    className={`conversation-item ${isActive ? "active" : ""}`}
+                    onClick={() => setSelectedJobId(job.jobId)}
+                  >
+                    <div className="avatar job">{job.jobId.replace("job-", "J")}</div>
+                    <div className="conversation-body">
+                      <div className="conversation-top">
+                        <h3>{job.title}</h3>
+                        <span className="conversation-time">
+                          {job.jobId.replace("job-", "Job ")}
+                        </span>
+                      </div>
+                      <p className="conversation-preview">{job.company}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="workflow-section">
+            <div className="workflow-section-header">
               <h2>Resume</h2>
-              <p className="panel-subtitle">
-                One candidate profile for every comparison.
-              </p>
+              <label className="upload-button compact">
+                {isUploading ? "…" : "Replace"}
+                <input
+                  type="file"
+                  accept=".pdf,.txt,.md,.markdown,application/pdf"
+                  disabled={isUploading}
+                  onChange={onResumeUpload}
+                />
+              </label>
             </div>
-            <span className="status-pill">
-              {resumeIsSample ? "Sample" : "Uploaded"}
-            </span>
-          </div>
-
-          <article className="card resume-card">
-            <p className="card-kicker">
-              {resumeIsSample ? "Sample candidate" : "Uploaded resume"}
-            </p>
-            <h3>{currentResume.title}</h3>
-            <p>{previewText(currentResume.text, 220)}</p>
-            <div className="meta-row">
-              {(resumeIsSample ? SAMPLE_RESUME_SKILLS : [currentResume.fileName]).map(
-                (skill) => (
-                  <span key={skill} className="tag">
-                    {skill}
-                  </span>
-                ),
-              )}
-            </div>
-          </article>
-
-          <label className="upload-button">
-            {isUploading ? "Uploading…" : "Replace resume"}
-            <input
-              type="file"
-              accept=".pdf,.txt,.md,.markdown,application/pdf"
-              disabled={isUploading}
-              onChange={onResumeChange}
-            />
-          </label>
-          <p className="hint">
-            PDF, Markdown, or text. Replacing the resume re-chunks it for chat.
-          </p>
+            <button type="button" className="conversation-item active resume-card">
+              <div className="avatar">{initials(currentResume.title)}</div>
+              <div className="conversation-body">
+                <div className="conversation-top">
+                  <h3>{currentResume.title}</h3>
+                  <span className="conversation-time">Active CV</span>
+                </div>
+                <p className="conversation-preview">{currentResume.fileName}</p>
+              </div>
+            </button>
+            <div className="resume-snippet">{previewText(currentResume.text, 220)}</div>
+          </section>
         </aside>
 
-        <section className="panel">
-          <div className="panel-header">
-            <div>
-              <h2>Jobs</h2>
-              <p className="panel-subtitle">
-                Select a role to scope retrieval.
-              </p>
+        <main className="chat-panel">
+          <header className="chat-header">
+            <div className="chat-header-left">
+              <div className="header-avatars">
+                <div className="avatar bot small">AI</div>
+                <div className="avatar small">{initials(currentResume.title)}</div>
+                {selectedJob ? (
+                  <div className="avatar job small">{initials(selectedJob.company)}</div>
+                ) : null}
+              </div>
+              <div className="chat-header-info">
+                <h2>
+                  {reviewReady
+                    ? `${currentResume.title} · ${selectedJob!.title}`
+                    : "Career chat"}
+                </h2>
+                <p>
+                  {reviewReady
+                    ? `${selectedJob!.company} · grounded in resume + ${selectedJob!.jobId} only`
+                    : "Select a job to begin"}
+                </p>
+              </div>
             </div>
-            <span className="status-pill">{currentJobs.length} roles</span>
-          </div>
+          </header>
 
-          <div className="job-list">
-            {currentJobs.map((job) => {
-              const isActive = job.jobId === selectedJob?.jobId;
-              return (
-                <button
-                  key={job.id}
-                  type="button"
-                  className={`job-card ${isActive ? "active" : ""}`}
-                  onClick={() => setSelectedJobId(job.jobId)}
-                >
-                  <header>
-                    <div>
-                      <h3>{job.title}</h3>
-                      <p>{job.company}</p>
-                    </div>
-                    <span className="tag">{jobLabel(job.jobId)}</span>
-                  </header>
-                  <p>{previewText(job.text)}</p>
-                </button>
-              );
-            })}
-          </div>
+          {llmProvider === "local" ? (
+            <p className="banner notice">
+              Offline mode — structured summaries from retrieved excerpts. Chat
+              auto-uses Ollama when it is running locally, or set{" "}
+              <code>LLM_PROVIDER=gemini</code>.
+            </p>
+          ) : null}
+          {notice ? <p className="banner notice">{notice}</p> : null}
+          {error ? <p className="banner error">{error}</p> : null}
 
-          <label className="upload-button">
-            {isUploading ? "Uploading…" : "Add job description"}
-            <input
-              type="file"
-              accept=".pdf,.txt,.md,.markdown,application/pdf"
-              disabled={isUploading}
-              multiple
-              onChange={onJobsChange}
-            />
-          </label>
-          <p className="hint">
-            Add one or more files. New jobs keep Job 1, Job 2, … IDs for chat.
-          </p>
-        </section>
-
-        <section className="panel chat-panel">
-          <div className="panel-header">
-            <div>
-              <h2>Chat</h2>
-              <p className="panel-subtitle">
-                Ask about fit, gaps, or interview prep for the selected job.
-              </p>
-            </div>
-            <span className="status-pill">
-              {selectedJob ? jobLabel(selectedJob.jobId) : "No job"}
-            </span>
-          </div>
-
-          <div className="prompt-row">
-            {PROMPT_CHIPS.map((chip) => (
-              <button
-                key={chip}
-                className="prompt-chip"
-                type="button"
-                disabled={isSending}
-                onClick={() => void sendMessage(chip)}
-              >
-                {chip}
-              </button>
-            ))}
-          </div>
-
-          <div className="chat-thread" aria-live="polite">
+          <div className="chat-body" aria-live="polite">
             {messages.length === 0 && !isSending ? (
               <div className="empty-chat">
-                <h3>Ready when you are</h3>
+                <div className="avatar bot" style={{ margin: "0 auto 16px" }}>
+                  AI
+                </div>
+                <h3>Compare resume to selected job</h3>
                 <p>
-                  Select a job, then send a question or use a suggested prompt.
-                  Sources will appear under each answer.
+                  Job 2 is selected by default. Try a suggested prompt — every
+                  answer cites resume and job chunks only.
                 </p>
               </div>
             ) : null}
 
             {messages.map((message) => (
-              <article
-                key={message.id}
-                className={`message ${message.role === "user" ? "user" : "assistant"}`}
-              >
-                <strong>{message.role === "user" ? "You" : "Assistant"}</strong>
-                <p>{message.content}</p>
-                {message.role === "assistant" && message.citations?.length ? (
-                  <div className="sources">
-                    <p className="sources-label">Sources</p>
-                    {message.citations.map((citation) => (
-                      <div key={citation.chunkId} className="source-item">
-                        <span className="source-badge">
-                          {citation.source === "resume"
-                            ? "Resume"
-                            : citation.jobId
-                              ? jobLabel(citation.jobId)
-                              : "Job"}
-                        </span>
-                        <strong>{citation.title}</strong>
-                        <p>{previewText(citation.quote, 220)}</p>
-                      </div>
-                    ))}
-                  </div>
+              <div key={message.id} className={`bubble-row ${message.role}`}>
+                {message.role === "assistant" ? (
+                  <div className="avatar bot small">AI</div>
                 ) : null}
-              </article>
+                <div className="bubble">
+                  <span className="bubble-sender">
+                    {message.role === "user" ? "You" : "Assistant"}
+                  </span>
+                  <p>{message.content}</p>
+                  <span className="bubble-time">{formatTime(message.sentAt)}</span>
+                </div>
+              </div>
             ))}
 
             {isSending ? (
-              <article className="message assistant">
-                <strong>Assistant</strong>
-                <p>Reading the resume and selected job…</p>
-              </article>
+              <div className="bubble-row assistant">
+                <div className="avatar bot small">AI</div>
+                <div className="bubble">
+                  <div className="typing-indicator" aria-label="Typing">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                </div>
+              </div>
             ) : null}
+
+            <div ref={chatEndRef} />
           </div>
 
-          {notice ? <p className="notice-banner">{notice}</p> : null}
-          {error ? <p className="error-banner">{error}</p> : null}
+          <footer className="chat-footer">
+            <div className="prompt-row">
+              {PROMPT_CHIPS.map((chip) => (
+                <button
+                  key={chip}
+                  className="prompt-chip"
+                  type="button"
+                  disabled={isSending || !reviewReady}
+                  onClick={() => void sendMessage(chip)}
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
 
-          <form className="composer" onSubmit={onSubmit}>
-            <textarea
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={onComposerKeyDown}
-              placeholder={`Ask about ${selectedJob?.title ?? "this role"}…`}
-              rows={3}
-              disabled={isSending}
-            />
-            <div className="composer-row">
-              <span className="hint">
-                Answers use the resume plus {selectedJob?.title ?? "the selected job"} only.
-              </span>
+            <form className="composer" onSubmit={onSubmit}>
+              <div className="composer-input-wrap">
+                <textarea
+                  ref={textareaRef}
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={onComposerKeyDown}
+                  placeholder="Ask about your experience for the selected job…"
+                  rows={1}
+                  disabled={isSending || !reviewReady}
+                />
+              </div>
               <button
                 className="send-button"
                 type="submit"
-                disabled={isSending || draft.trim().length === 0}
+                disabled={isSending || !reviewReady || draft.trim().length === 0}
+                aria-label="Send"
               >
-                Send
+                <IconSend />
               </button>
+            </form>
+          </footer>
+        </main>
+
+        <aside className="info-panel">
+          <div className="info-header">
+            <div className="avatar job">
+              {selectedJob ? initials(selectedJob.company) : "?"}
             </div>
-          </form>
-        </section>
-      </section>
-    </main>
+            <h2>{selectedJob?.title ?? "No job selected"}</h2>
+            <p>{selectedJob?.company ?? "Pick a job from the list"}</p>
+          </div>
+
+          <div className="info-stats">
+            <div className="stat-card">
+              <strong>{currentJobs.length}</strong>
+              <span>Jobs loaded</span>
+            </div>
+            <div className="stat-card">
+              <strong>{latestCitations.length}</strong>
+              <span>Sources cited</span>
+            </div>
+          </div>
+
+          <section className="info-section">
+            <h3>Selected job</h3>
+            <div className="info-card">
+              {selectedJob ? (
+                <>
+                  <strong>{selectedJob.title}</strong>
+                  {previewText(selectedJob.text, 160)}
+                  <div className="tag-row">
+                    <span className="tag">{selectedJob.jobId}</span>
+                    <span className="tag">{selectedJob.fileName}</span>
+                  </div>
+                </>
+              ) : (
+                "Select a job to see details."
+              )}
+            </div>
+          </section>
+
+          <section className="info-section">
+            <h3>Resume</h3>
+            <div className="info-card">
+              <strong>{currentResume.title}</strong>
+              {previewText(currentResume.text, 140)}
+              <div className="tag-row">
+                <span className="tag">{currentResume.fileName}</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="info-section">
+            <h3>Sources</h3>
+            {latestCitations.length === 0 ? (
+              <div className="info-card">
+                Citations from the latest answer appear here for audit.
+              </div>
+            ) : (
+              <div className="source-list">
+                {latestCitations.map((citation) => (
+                  <div key={citation.chunkId} className="source-item">
+                    <span className="source-badge">
+                      {citation.source === "resume"
+                        ? "Resume"
+                        : citation.jobId
+                          ? citation.jobId.replace("job-", "Job ")
+                          : "Job"}
+                    </span>
+                    <strong>{citation.title}</strong>
+                    <p>{previewText(citation.quote, 120)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </aside>
+      </div>
+    </div>
   );
 }

@@ -1,9 +1,10 @@
 import type { ChatMessage, JobDocument, ResumeDocument } from "@/src/types";
 
 export const sampleResume: ResumeDocument = {
-  id: "resume-sample",
+  id: "candidate-1",
+  candidateId: "candidate-1",
   source: "resume",
-  title: "Alex Morgan Resume",
+  title: "Alex Morgan",
   fileName: "alex-morgan-resume.md",
   createdAt: "2026-08-18T09:00:00.000Z",
   text: [

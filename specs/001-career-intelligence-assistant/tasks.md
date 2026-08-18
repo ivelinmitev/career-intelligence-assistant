@@ -47,9 +47,9 @@ description: Task list for Career Intelligence Assistant
 
 ## Phase 7: Polish (remaining)
 
-- [ ] T020 Add Dockerfile for the Next app; keep env and models out of the image
-- [ ] T021 Provide a README outline only; human writes final prose
-- [ ] T022 Capture screenshots into `screenshots/`
+- [x] T020 Add Dockerfile for the Next app; keep env and models out of the image
+- [x] T021 README with setup, architecture, and sections to personalize
+- [x] T022 Capture screenshots into `screenshots/`
 - [ ] T023 Optional: `specify` CLI install if a reviewer wants the upstream Spec Kit commands
 
 ## Dependencies
